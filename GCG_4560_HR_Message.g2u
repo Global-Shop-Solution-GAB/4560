@@ -1,0 +1,201 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Caption("HR Message")
+Gui.Form..Size(7740,6690)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form.lbl1.Create(Label,"Recipient",True,1935,255,0,180,180,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtRecipient.Create(TextBox,"",True,2730,300,0,180,375,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtRecipient.ControlGroup(1)
+Gui.Form.txtRecipient.Event(LostFocus,txtRecipient_LostFocus)
+Gui.Form.cmdbrowser.Create(Button)
+Gui.Form.cmdbrowser.Size(525,375)
+Gui.Form.cmdbrowser.Position(2955,345)
+Gui.Form.cmdbrowser.Caption("^")
+Gui.Form.cmdbrowser.Event(Click,cmdbrowser_Click)
+Gui.Form.lbl2.Create(Label,"Message",True,1935,255,0,180,1095,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtMessage.Create(TextboxM)
+Gui.Form.txtMessage.Size(7185,3375)
+Gui.Form.txtMessage.Position(180,1380)
+Gui.Form.txtMessage.ControlGroup(1)
+Gui.Form.cmdSend.Create(Button)
+Gui.Form.cmdSend.Size(855,375)
+Gui.Form.cmdSend.Position(180,5190)
+Gui.Form.cmdSend.Caption("Send")
+Gui.Form.cmdSend.Event(Click,cmd2_Click)
+Gui.Form.chkAll.Create(CheckBox)
+Gui.Form.chkAll.Size(1560,360)
+Gui.Form.chkAll.Position(1320,5205)
+Gui.Form.chkAll.Caption("Send to All")
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+v.Global.sEmp.Declare(String)
+Program.Sub.Preflight.End
+
+Program.Sub.cmd2_Click.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+v.Local..BulkDeclareString(sMsg, sSql, sRecipent, sBody, SempSQL)
+v.Local..BulkDeclareLong(iGroupID, iRecipent)
+
+'Modification added 10/12/17 by WAW to allow all employees to be sent the messages by HR
+f.Intrinsic.Control.If(v.Screen.Form!chkAll.Value,=,1)
+	'get the group ID
+	F.Intrinsic.String.Build("Select Group_ID from User_Groups where GS_Group = 'HRMSG' and Company = '{0}'", v.Caller.CompanyCode, v.Local.sSql)
+	F.ODBC.Connection!conC.ExecuteandReturn(v.Local.sSql, v.Local.iGroupID)
+	'set the body of the message to what is on the text
+	V.Local.sBody.Set(v.Screen.Form!txtMessage.text)
+	v.Local.sempsql.set("Select DISTINCT EMPLOYEE from V_EMPLOYEE_MSTR")
+	F.ODBC.Connection!conX.OpenLocalRecordsetRO("rst",V.Local.sempSQL)
+	F.Intrinsic.Control.DoUntil(V.ODBC.conX!rst.EOF,=,True)
+		v.Global.sEmp.Set(v.ODBC.conx!rst.FieldValTrim!EMPLOYEE)
+		'Get User ID from Employee for the Recipient
+		F.Global.Security.GetUserFromEmpNo(v.Global.sEmp, v.Local.sRecipent)
+		'use custom table to store message
+		F.Intrinsic.String.Build("Insert into GCG_4560_Messages (Configuration_ID, Recipient, Triggered_By, Status, Title, Text, Timestamp) Values ('1000','{0}', '{1}', '0', 'HR MSG', '{2}', NOW())",v.Global.sEmp, v.Local.iGroupID, v.Local.sBody.PSQLFriendly,v.Local.sSql)
+		F.ODBC.Connection!conx.Execute(v.Local.sSql)
+		'Add to History Table.
+		F.Intrinsic.String.Build("Insert into GCG_4560_Msg_Hist (Configuration_ID, Recipient, Triggered_By, Status, Title, Text, Timestamp_sent) Values ('1000','{0}', '{1}', '0', 'HR MSG', '{2}', NOW())",v.Global.sEmp, v.Local.iGroupID, v.Local.sBody.PSQLFriendly,v.Local.sSql)
+		F.ODBC.Connection!conx.Execute(v.Local.sSql)
+		'move to the next recordset until done then close/clear group and set focus
+		F.ODBC.conx!rst.MoveNext
+		Function.Intrinsic.Control.Loop
+	F.ODBC.conX!rst.Close	
+	gui.Form..Cleargroup(1)
+	gui.Form.chkAll.Value(0)
+	gui.Form.txtRecipient.SetFocus
+f.Intrinsic.Control.Else
+	'get the group ID
+	F.Intrinsic.String.Build("Select Group_ID from User_Groups where GS_Group = 'HRMSG' and Company = '{0}'", v.Caller.CompanyCode, v.Local.sSql)
+	F.ODBC.Connection!conC.ExecuteandReturn(v.Local.sSql, v.Local.iGroupID)
+	'Get User ID from Employee for the Recipient
+	F.Global.Security.GetUserFromEmpNo(v.Global.sEmp, v.Local.sRecipent)
+	V.Local.sBody.Set(v.Screen.Form!txtMessage.text)
+	'Get the Recipient and send the message
+	F.Intrinsic.Control.If(v.Local.sRecipent.IsDate, =, True)
+		F.Global.Messaging.InternalMessageCreate(1000, v.Ambient.Now, v.Local.iGroupID, "HR MSG", v.Local.sBody, v.Local.sMsg)
+		F.Global.Messaging.InternalMessageQueueToUser(v.Local.sRecipent, v.Local.sMsg)
+	F.Intrinsic.Control.Else
+		'use custom table to store message
+		F.Intrinsic.String.Build("Insert into GCG_4560_Messages (Configuration_ID, Recipient, Triggered_By, Status, Title, Text, Timestamp) Values ('1000','{0}', '{1}', '0', 'HR MSG', '{2}', NOW())",v.Global.sEmp, v.Local.iGroupID, v.Local.sBody.PSQLFriendly,v.Local.sSql)
+		F.ODBC.Connection!conx.Execute(v.Local.sSql)
+	F.Intrinsic.Control.EndIf
+	'Add to History Table.
+	F.Intrinsic.String.Build("Insert into GCG_4560_Msg_Hist (Configuration_ID, Recipient, Triggered_By, Status, Title, Text, Timestamp_sent) Values ('1000','{0}', '{1}', '0', 'HR MSG', '{2}', NOW())",v.Global.sEmp, v.Local.iGroupID, v.Local.sBody.PSQLFriendly,v.Local.sSql)
+	F.ODBC.Connection!conx.Execute(v.Local.sSql)
+	gui.Form..Cleargroup(1)
+	gui.Form.txtRecipient.SetFocus
+f.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_HR_Message.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmd2_Click.End
+
+Program.Sub.cmdbrowser_Click.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+v.Local.sRet.Declare(String)
+F.Intrinsic.UI.Browser(51, "", v.local.sRet)
+F.Intrinsic.Control.If(v.Local.sRet, !=,"***CANCEL***")
+	F.Intrinsic.String.Split(v.Local.sRet, "*!*", v.Local.sRet)
+	gui.Form.txtRecipient.text(v.Local.sRet(1))
+	v.Global.sEmp.Set(v.Local.sRet(0))
+f.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_HR_Message.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdbrowser_Click.End
+
+Program.Sub.Form_UnLoad.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+F.ODBC.Connection!conx.Close
+F.ODBC.Connection!conC.Close
+F.Intrinsic.Control.End
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_HR_Message.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.txtRecipient_LostFocus.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+v.Local.sReceipent.Declare(String)
+v.Local.sReceipent.Set(v.Screen.Form!txtRecipient.Text)
+gui.Form.txtRecipient.text(v.Local.sReceipent.UCase)
+'set the global variable
+F.Intrinsic.Control.If(v.Local.sReceipent.Trim, !=, "")
+	f.Data.Dictionary.ReturnKeyFromValue("Employee", v.Local.sReceipent.UCase, v.Global.sEmp)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_HR_Message.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.txtRecipient_LostFocus.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+'This project was create for Ranger Die by SKC on 7/11/2017
+'This project has 2 custom tables: GCG_4560_Messages and GCG_4560_Msg_Hist There are 3 GAB Scripts for this Project.
+'This GAB Script will create a message from HR.  The message is stored in the Queue message table, and a custom table.  The message will display when any user clocks, and for those who are menu users they will have
+'additional access to view the message from the Queue message Screen as well.  The functionality for veiwing the message at clock in is in a separate GAB Script.  
+
+'Modification added 10/12/17 by WAW to allow all employees to be sent the messages by HR
+
+V.Local.sError.Declare(String)
+v.Local.bRet.Declare(Boolean)
+v.Local..BulkDeclareString(sSql, sIcon)
+F.Intrinsic.String.Build("{0}\GAB\GAS\gss2.ico",V.Caller.PluginsDir,v.Local.sIcon)
+gui.Form..Icon(v.Local.sIcon)
+Gui.Form.txtMessage.DefaultValue("")
+Gui.Form.txtRecipient.DefaultValue("")
+
+F.ODBC.Connection!conx.openconnection(v.Ambient.PDSN, v.Ambient.PUser, v.Ambient.PPass)
+F.ODBC.Connection!conC.openconnection(v.Ambient.Ccon, v.Ambient.Cuser, v.Ambient.Cpass)
+
+F.Global.Security.IsInGroup(v.Caller.User, "HRMSG",v.Caller.CompanyCode, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	v.Local.sSql.Set("Select Employee, UCase(Name) from Employee_Mstr where Date_Termination = '000000'")
+	F.Data.Dictionary.CreateFromSQL("Employee","conx",v.Local.sSql)
+	gui.Form.txtRecipient.AddAutoCompleteItem("Employee","Dictionary")
+	F.Data.Dictionary.SetDefaultReturn("Employee", " ")
+	Gui.Form..Show
+F.Intrinsic.Control.Else
+	F.Intrinsic.Control.CallSub("Form_Unload")
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_HR_Message.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Main.End
