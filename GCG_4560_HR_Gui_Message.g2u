@@ -1,0 +1,60 @@
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+v.Local..BulkDeclareString(sRecipent,sSql,sMessageID,sRet)
+v.Local..BulkDeclareLong(iGroupID,iCount)
+v.Local.bNumeric.Declare(Boolean)
+
+F.ODBC.Connection!conx.openconnection(v.Ambient.PDSN, v.Ambient.PUser, v.Ambient.PPass)
+F.ODBC.Connection!conC.openconnection(v.Ambient.Ccon, v.Ambient.Cuser, v.Ambient.Cpass)
+'This hook is in the shop floor data collection screen and is triggered when a user clocks in.  There will be a check to see if the employee has a message from HR.  If there is then the message will display.  If there are multiple messages then it will loop through them.
+'After the message is read the read flag will be set so it will not display again at clock in.
+F.Intrinsic.Control.If(v.Caller.Hook, =, 15921)
+	'check to see if the employee has a message from HR.
+	F.Global.Security.GetUserFromEmpNo(v.Passed.009993, v.Local.sRecipent)
+	F.Intrinsic.String.Build("Select Group_ID from User_Groups where GS_Group = 'HRMSG' and Company = '{0}'", v.Caller.CompanyCode, v.Local.sSql)
+	F.ODBC.Connection!conC.ExecuteandReturn(v.Local.sSql, v.Local.iGroupID)
+	F.Intrinsic.Control.If(v.Local.sRecipent.IsNumeric, =, True)
+		F.Intrinsic.String.Build("select MSG_Messages.Message_ID, MSG_Messages.Text from MSG_QUEUE Left Join MSG_Messages on Msg_queue.Message_ID=MSG_Messages.MEssage_ID Where Msg_queue.Recipient = '{0}' and Msg_queue.Status = '0' and MSG_Messages.Triggered_By = '{1}'", v.Local.sRecipent, v.Local.iGroupID,v.Local.sSql)
+		F.ODBC.Connection!conc.ExecuteandReturn(v.Local.sSql, v.Local.sMessageID)
+	F.Intrinsic.Control.Else
+		v.Local.bRet.Declare(False)
+		v.Local.sRecipent.Set(v.Passed.009993)
+		F.Intrinsic.String.Build("Select Message_ID, Text from GCG_4560_Messages where Recipient = '{0}' and Status = '0' and Triggered_By = '{1}'", v.Passed.009993, v.Local.iGroupID, v.Local.sSql)
+		F.ODBC.Connection!conx.executeandreturn(v.Local.sSql, v.Local.sMessageID)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.If(v.Local.sMessageID, !=, "")
+		F.Intrinsic.String.Split(v.Local.sMessageID, "#$#", v.Local.sMessageID)
+		'Loop through messages incase there is more than one.
+		F.Intrinsic.Control.For(v.Local.iCount, 0, v.Local.sMessageID.UBound, 1)
+			F.Intrinsic.String.Split(v.Local.sMessageID(v.Local.iCount), "*!*", v.Local.sRet)
+			F.Intrinsic.UI.Msgbox(v.Local.sRet(1), "Message from HR")
+			'Update the status to 1 to signal the message is read.
+			F.Intrinsic.Control.If(v.Local.bNumeric, =, True)
+				F.intrinsic.String.Build("Update MSG_Queue set Status ='1' where Message_ID = '{0}'", v.Local.sRet(0), v.Local.sSql)
+				F.ODBC.Connection!conc.Execute(v.Local.sSql)
+			F.Intrinsic.Control.Else
+				F.intrinsic.String.Build("Update GCG_4560_Messages set Status ='1' where Recipient = '{0}'", v.Local.sRecipent, v.Local.sSql)
+				F.ODBC.Connection!conx.Execute(v.Local.sSql)
+			F.Intrinsic.Control.EndIf
+			F.intrinsic.String.Build("Update GCG_4560_Msg_Hist set Status ='1' where Recipient = '{0}'", v.Local.sRecipent, v.Local.sSql)
+			F.ODBC.Connection!conx.Execute(v.Local.sSql)
+		F.Intrinsic.Control.Next(v.Local.iCount)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+F.ODBC.Connection!conC.Close
+F.ODBC.Connection!conx.Close
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_HR_GUI_Message.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.End
+Function.Intrinsic.Control.EndIf
+Program.Sub.Main.End
