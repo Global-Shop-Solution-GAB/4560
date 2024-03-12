@@ -1,0 +1,205 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Caption("HR Messages")
+Gui.Form..Size(15360,8865)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form.GsGCMessages.Create(GsGridControl)
+Gui.Form.GsGCMessages.Size(15015,6480)
+Gui.Form.GsGCMessages.Position(60,1065)
+Gui.Form.lbl1.Create(Label,"Employee",True,1935,255,0,135,210,True,0,"Arial",8,-2147483633,0)
+Gui.Form.txtRecipient.Create(TextBox,"",True,2880,300,0,165,435,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtRecipient.Event(LostFocus,txtEmployee_LostFocus)
+Gui.Form.cmdbrowser.Create(Button)
+Gui.Form.cmdbrowser.Size(435,375)
+Gui.Form.cmdbrowser.Position(3135,390)
+Gui.Form.cmdbrowser.Caption("^")
+Gui.Form.cmdbrowser.Event(Click,cmdbrowser_Click)
+Gui.Form.picGSSLogo.Create(PictureBox)
+Gui.Form.picGSSLogo.Size(4125,975)
+Gui.Form.picGSSLogo.Position(6030,45)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+v.Global.sEmp.Declare(String)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+'This program will show a dashboard for HR that will allow the memebers of HR to view if a message was read and add notes if need be.
+'This runs from a custom menu item.
+v.Local.sError.BulkDeclareString(sSql, sExpression, sGssLogo, sIcon)
+v.Local.iGroupID.Declare(Long)
+F.ODBC.Connection!conx.openconnection(v.Ambient.PDSN, v.Ambient.PUser, v.Ambient.PPass)
+F.ODBC.Connection!conC.openconnection(v.Ambient.Ccon, v.Ambient.Cuser, v.Ambient.Cpass)
+F.Intrinsic.String.Build("{0}\GAB\GAS\gss2.ico",V.Caller.PluginsDir,v.Local.sIcon)
+F.Intrinsic.String.Build("{0}\GAB\GAS\Gss-Logo.png",V.Caller.PluginsDir,V.Local.sGssLogo)
+gui.Form.picGSSLogo.Picture(v.Local.sGssLogo)
+Gui.Form..Icon(v.Local.sIcon)
+Gui.Form.GsGCMessages.Anchor(15)
+gui.Form.cmdbrowser.Anchor(5)
+gui.Form.lbl1.Anchor(5)
+Gui.Form.txtEmployee.Anchor(5)
+
+F.Intrinsic.String.Build("Select Group_ID from User_Groups where GS_Group = 'HRMSG' and Company = '{0}'", v.Caller.CompanyCode, v.Local.sSql)
+F.ODBC.Connection!conC.ExecuteandReturn(v.Local.sSql, v.Local.iGroupID)
+v.Local.sSql.Set("select Distinct  Recipient, ISNULL(UCase(Name),'UNKNOWN RECIPIENT') AS NAME from GCG_4560_Msg_Hist Left Join Employee_Mstr on Recipient = Employee")
+F.Data.Dictionary.CreateFromSQL("EmployeeDict","conx",v.Local.sSql)
+F.Data.Dictionary.SetDefaultReturn("EmployeeDict", " ")
+gui.Form.txtRecipient.AddAutoCompleteItem("EmployeeDict","Dictionary")
+F.Data.DataTable.CreateFromSql("Employees", "conx", v.Local.sSql, True)
+F.Data.DataView.Create("Employees","EmpView")
+v.Local.sSql.Set("Select Message_ID,Recipient, Text, Status, Notes, TimeStamp_Sent, Configuration_ID, Triggered_By, Title From GCG_4560_Msg_Hist")
+F.Data.DataTable.CreateFromSQL("Employees$Text", "conx", v.Local.sSql, True)
+F.Data.DataTable.CreateFromSQL("EmployeeSave", "conx", v.Local.sSql, true)
+F.Data.DataTable.SetPK("Employees$Text","Message_ID")
+F.Data.DataTable.SetPK("EmployeeSave", "Message_ID")
+v.Local.sExpression.Set("IIF(Status = 0, 'Unread', 'Read')")
+F.Data.DataTable.AddExpressionColumn("Employees$Text","Status1",String,v.Local.sExpression )
+F.Data.DataView.Create("Employees$Text","TextView")
+Gui.Form.GsGCMessages.AddGridViewFromDataView("EmployeesView", "Employees","EmpView")
+Gui.Form.GsGCMessages.AddGridViewFromDataView("GridText","Employees", "TextView")
+F.Data.DataTable.AddRelation("Employees", "Recipient", "Employees$Text", "Recipient", "EmployeeText")
+Gui.Form.GsGCMessages.MainView("EmployeesView")
+F.Intrinsic.Control.CallSub("Grid")
+Gui.Form..Show
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_MessageDashboard.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Main.End
+
+Program.Sub.SingleEmployee.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+v.Local.sFilter.Declare(String)
+
+F.Data.DataView.Close("Employees","EmpView")
+F.Data.DataView.Close("Employees$Text", "TextView")
+F.Intrinsic.String.Build("Recipient = {0}",v.Args.sRet, v.Local.sFilter )
+F.Data.DataView.Create("Employees", "EmpView", 22, v.Local.sFilter, "RECIPIENT ASC" )
+F.Intrinsic.String.Build("Recipient = {0}", v.Args.sRet, V.Local.sFilter)
+F.Data.DataView.Create("Employees$Text", "TextView", 22, v.Local.sFilter,"Message_ID ASC")
+Gui.Form.GsGCMessages.AddGridviewFromDataview("EmployeesView", "Employees", "EmpView")
+Gui.Form.GsGCMessages.AddGridviewFromDataview("GridText", "Employees", "TextView")
+Gui.Form.GsGCMessages.MainView("EmployeesView")
+F.Intrinsic.Control.CallSub("Grid")
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_MessageDashboard.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.SingleEmployee.End
+
+Program.Sub.Form_UnLoad.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+'Save the Data to the Database
+F.Data.DataTable.Merge("Employees$Text","EmployeeSave", False, 2 )
+F.Data.DataTable.SaveToDB("EmployeeSave", "conx","GCG_4560_Msg_Hist","Message_ID", 7)
+F.ODBC.Connection!conC.Close
+F.ODBC.Connection!conx.Close
+F.Intrinsic.Control.End
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_MessageDashboard.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.End
+Function.Intrinsic.Control.EndIf
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.txtEmployee_LostFocus.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+v.Local.sReceipent.Declare(String)
+
+v.Local.sReceipent.Set(v.Screen.Form!txtRecipient.Text)
+gui.Form.txtEmployee.text(v.Local.sReceipent.UCase)
+F.Intrinsic.Control.If(v.Local.sReceipent.Trim, !=, "")
+	f.Data.Dictionary.ReturnKeyFromValue("EmployeeDict", v.Local.sReceipent.UCase, v.Global.sEmp)
+	F.Intrinsic.Control.CallSub(singleEmployee, "sRet", v.Global.sEmp)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_MessageDashboard.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.txtEmployee_LostFocus.End
+
+Program.Sub.cmdbrowser_Click.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+v.Local..BulkDeclareString(sRet, sTitles, sSql)
+v.Local.iWidths.Declare(Long)
+F.Intrinsic.String.Split("Emp ID*!*Name", "*!*", v.Local.sTitles)
+F.Intrinsic.String.Split("1000*!*3000", "*!*", v.Local.iWidths)
+v.Local.sSql.Set("select Distinct  Recipient, UCase(Name) from GCG_4560_Msg_Hist Inner Join Employee_Mstr on Recipient = Employee")
+F.Intrinsic.UI.Browser("Select an Employee", "conx", v.Local.sSql, v.Local.sTitles, v.Local.iWidths, v.Local.sRet)
+F.Intrinsic.Control.If(v.Local.sRet, !=,"***CANCEL***")
+	F.Intrinsic.String.Split(v.Local.sRet, "*!*", v.Local.sRet)
+	gui.Form.txtRecipient.text(v.Local.sRet(1))
+	v.Global.sEmp.Set(v.Local.sRet(0))
+	F.Intrinsic.Control.CallSub(singleEmployee, "sRet", v.Local.sRet(0))
+f.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_MessageDashboard.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdbrowser_Click.End
+
+Program.Sub.Grid.Start
+F.Intrinsic.Control.SetErrorHandler("Refresh_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+Gui.Form.GsGCMessages.setColumnProperty("EmployeesView", "Recipient", "Visible", False)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Recipient", "Visible", False)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Status", "Visible", False)
+
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Status1", "Caption", "Status")
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "TimeStamp_Sent", "Caption", "Sent")
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Text", "Caption", "Message")
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Message_ID", "Visible", False)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Configuration_ID", "Visible", False)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Triggered_By", "Visible", False)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Title", "Visible", False)
+Gui.Form.GsGCMessages.setColumnProperty("EmployeesView", "Name", "Caption", "Employee")
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Status", "MaxWidth", 50)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "TimeStamp_Sent", "MaxWidth", 150)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Notes", "minWidth", 200)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Text", "minWidth", 300)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Notes", "ReadOnly", False)
+Gui.Form.GsGCMessages.setColumnProperty("GridText", "Notes", "AllowEdit", True)
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Refresh_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4560_MessageDashboard.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Grid.End
